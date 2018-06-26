@@ -1,5 +1,7 @@
 #! /usr/bin/env python
 
+from __future__ import print_function
+
 import shlex, argparse, cmd
 import logging
 import random, time, os, sys
@@ -82,7 +84,7 @@ class Conversions(object):
                     return long(i * cls._mult[ds])
                 except:
                     pass
-        raise DataSizeError, s
+        raise DataSizeError(s)
 
     @classmethod
     def int2datasize(cls,v):
@@ -116,18 +118,22 @@ class NetworkTester(cmd.Cmd):
 
     def __init__(self, cmdfile, outfile):
         # Create parsers
-        ap = self.ap_parse_define = argparse.ArgumentParser(
-            prog='define',
-            description='Define an object for the network tester')
-        sp = ap.add_subparsers()
 
-        p = TargetData.build_parser(sp, 'target')
-        p.set_defaults(func=self._do_define_target)
-        p = TestData.build_parser(sp, 'test')
-        p.set_defaults(func=self._do_define_test)
-        p = HostData.build_parser(sp, 'host')
-        p.set_defaults(func=self._do_define_host)
-        self.ap_parse_run = RunTest.build_parser('run')
+        ap = self.ap_parse_server = argparse.ArgumentParser(
+            prog='server',
+            description='Define a server'
+        )
+
+        ap = self.ap_parse_client =  argparse.ArgumentParser(
+            prog='client',
+            description='Define a client'
+        )
+        
+        self.ap_parse_test = argparse.ArgumentParser(
+            prog='test',
+            description='Test the network'
+        )
+      
         self._cmd = ''
         cmd.Cmd.__init__(self, stdin=cmdfile)
         if cmdfile != sys.stdin:
@@ -136,9 +142,8 @@ class NetworkTester(cmd.Cmd):
         else:
             self.prompt = 'nwl: '
         #
-        self.targets = {}
-        self.tests = {}
-        self.hosts = {}
+        self.servers = {}
+        self.clients = {}
         self.outfile = outfile
 
     def emptyline(self):
@@ -175,17 +180,17 @@ class NetworkTester(cmd.Cmd):
     do_EOF = do_exit
 
     def help_exit(self):
-        print 'usage: exit'
-        print ''
-        print 'Exit from nwl'
+        print ('usage: exit')
+        print ('')
+        print ('Exit from nwl')
     help_EOF = help_exit
 
-    # "define"
+    # "server"
 
-    def do_define(self, cs):
+    def do_server(self, cs):
         L = shlex.split(cs)
         try:
-            n = self.ap_parse_define.parse_args(L)
+            n = self.ap_parse_server.parse_args(L)
         except SystemExit as e:
             return False
         except:
@@ -193,24 +198,15 @@ class NetworkTester(cmd.Cmd):
         n.func(n)
         return False
 
-    def help_define(self):
-        self.ap_parse_define.print_help()
+    def help_server(self):
+        self.ap_parse_server.print_help()
 
-    def _do_define_target(self, n):
-        self.targets[n.target] = TargetData(n)
+    # "test"
 
-    def _do_define_test(self, n):
-        self.tests[n.testname] = TestData(n)
-
-    def _do_define_host(self, n):
-        self.hosts[n.hostname] = HostData(n)
-
-    # "run"
-
-    def do_run(self, cs):
+    def do_test(self, cs):
         L = shlex.split(cs)
         try:
-            n = self.ap_parse_run.parse_args(L)
+            n = self.ap_parse_test.parse_args(L)
         except SystemExit as e:
             return False
         except:
@@ -219,8 +215,8 @@ class NetworkTester(cmd.Cmd):
         r.run_test()
         return False
 
-    def help_run(self):
-        self.ap_parse_run.print_help()
+    def help_test(self):
+        self.ap_parse_test.print_help()
 
 
 def main():
