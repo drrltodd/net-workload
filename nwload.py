@@ -67,7 +67,7 @@ class Conversions(object):
 
     @classmethod
     def datasize2int(cls,s):
-        """Convert a data size specification into a long integer."""
+        """Convert a data size specification into a integer."""
         m = cls._spec.match(s)
         if m is not None:
             digits = m.group('digits')
@@ -75,13 +75,13 @@ class Conversions(object):
             if frac is not None:
                 i = float(digits+frac)
             else:
-                i = long(digits)
+                i = int(digits)
             ds = m.group('spec')
             if ds == '':
                 return i
             else:
                 try:
-                    return long(i * cls._mult[ds])
+                    return int(i * cls._mult[ds])
                 except:
                     pass
         raise DataSizeError(s)
@@ -104,47 +104,17 @@ class DataSizeError(Exception):
 
 
 
-class NetworkTester(cmd.Cmd):
-    """Command interpreter for the network workload tester.
+class ACcmd(cmd.Cmd):
 
-    This uses the Python cmd module to parse commands.  We subvert it
-    a bit to work better from scripts, but prefer it to shlex since it
-    allows us to (potentially) provide CLI features such as command
-    completion.
-
-    The argparse module is used to parse arguments to individual
-    commands, as well as subcommands.  It too is somewhat subverted to
-    work better with scripts."""
-
-    def __init__(self, cmdfile, outfile):
-        # Create parsers
-
-        ap = self.ap_parse_server = argparse.ArgumentParser(
-            prog='server',
-            description='Define a server'
-        )
-
-        ap = self.ap_parse_client =  argparse.ArgumentParser(
-            prog='client',
-            description='Define a client'
-        )
-        
-        self.ap_parse_test = argparse.ArgumentParser(
-            prog='test',
-            description='Test the network'
-        )
-      
+    def __init__(self, cmdFile, outFile, prompt):
+        cmd.Cmd.__init__(self, stdin=cmdFile, stdout=outFile)
         self._cmd = ''
-        cmd.Cmd.__init__(self, stdin=cmdfile)
-        if cmdfile != sys.stdin:
+        if cmdFile != sys.stdin:
             self.use_rawinput = False
-            self.prompt = ''
-        else:
-            self.prompt = 'nwl: '
-        #
-        self.servers = {}
-        self.clients = {}
-        self.outfile = outfile
+            prompt = ''
+        self.prompt = self._prompt = prompt
+        self.outFile = outFile
+
 
     def emptyline(self):
         return False
@@ -168,7 +138,7 @@ class NetworkTester(cmd.Cmd):
         # Handle prompting for continued lines
         if self.use_rawinput:
             if self._cmd == '':
-                self.prompt = 'nwl: '
+                self.prompt = self._prompt
             else:
                 self.prompt = '____ '
         return stop
@@ -185,42 +155,72 @@ class NetworkTester(cmd.Cmd):
         print ('Exit from nwl')
     help_EOF = help_exit
 
-    # "server"
 
-    def do_server(self, cs):
-        L = shlex.split(cs)
-        try:
-            n = self.ap_parse_server.parse_args(L)
-        except SystemExit as e:
-            return False
-        except:
-            return True
-        n.func(n)
-        return False
+class ACcommand:
+    def __init__(self, parser = None):
+        self.parser = parser
 
-    def help_server(self):
-        self.ap_parse_server.print_help()
+    def __call__(self, f):
+        """Decorate f to be a Cmd method."""
 
-    # "test"
+        if self.parser is None:
+            self.parser = f(None, None, None, True)
+        
+        def wrapped_do(*args):
+            cs = args[1]
+            L = shlex.split(cs)
+            try:
+                parsed = self.parser.parse_args(L)
+            except SystemExit:
+                return
+            #return f(*args, **{'parsed': parsed})
+            return f(args[0], cs, parsed, False)
 
-    def do_test(self, cs):
-        L = shlex.split(cs)
-        try:
-            n = self.ap_parse_test.parse_args(L)
-        except SystemExit as e:
-            return False
-        except:
-            return True
-        r = RunTest(n, self.targets, self.tests, self.outfile)
-        r.run_test()
-        return False
-
-    def help_test(self):
-        self.ap_parse_test.print_help()
+        wrapped_do.__doc__ = self.parser.format_help()
+        return wrapped_do
 
 
+
+
+class NetworkTester(ACcmd):
+    """Command interpreter for the network workload tester.
+
+    This uses the Python cmd module to parse commands.  We subvert it
+    a bit to work better from scripts, but prefer it to shlex since it
+    allows us to (potentially) provide CLI features such as command
+    completion.
+
+    The argparse module is used to parse arguments to individual
+    commands, as well as subcommands.  It too is somewhat subverted to
+    work better with scripts."""
+
+    def __init__(self, cmdFile=sys.stdin, outFile=sys.stdout):
+        ACcmd.__init__(self, cmdFile, outFile, 'nwl: ')
+
+    @ACcommand()
+    def do_server(self, line, parsed, getParser):
+        if getParser:
+            parser = argparse.ArgumentParser(prog='server')
+            parser.add_argument('-n', '--name',
+                            required=True,
+                            action='append',
+                            help='Server name')
+            return parser
+        print('Server', parsed)
+
+    @ACcommand()
+    def do_client(self, line, parsed, getParser):
+        if getParser:
+            parser = argparse.ArgumentParser(prog='client')
+            parser.add_argument('-n', '--name',
+                            required=True,
+                            action='append',
+                            help='Client name')
+            return parser
+        print('Client', parsed)
+
+    
 def main():
-
     # Set up logging.
     logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 
