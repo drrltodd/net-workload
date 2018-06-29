@@ -102,9 +102,19 @@ class DataSizeError(Exception):
 
 ################################################################
 
+class Host(object):
+    """Network host"""
+
+    def __init__(self, name, addr):
+        self.name = name
+        self.addr = addr
+
+################################################################
+
 
 
 class ACcmd(cmd.Cmd):
+    """Base class for script-like cmd framework"""
 
     def __init__(self, cmdFile, outFile, prompt):
         cmd.Cmd.__init__(self, stdin=cmdFile, stdout=outFile)
@@ -120,7 +130,7 @@ class ACcmd(cmd.Cmd):
         return False
 
     def precmd(self, line):
-        # Help deal with continued lines
+        """Deal with continued lines."""
         if line == '' or line[-1] != '\\':
             # Command is finished here
             res = self._cmd + line
@@ -135,7 +145,7 @@ class ACcmd(cmd.Cmd):
             return ''
 
     def postcmd(self, stop, line):
-        # Handle prompting for continued lines
+        """Handle prompting for continued lines"""
         if self.use_rawinput:
             if self._cmd == '':
                 self.prompt = self._prompt
@@ -157,6 +167,7 @@ class ACcmd(cmd.Cmd):
 
 
 class ACcommand:
+    """Decorator so cmd commands easily work with argparse"""
     def __init__(self, parser = None):
         self.parser = parser
 
